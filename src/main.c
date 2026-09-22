@@ -36,7 +36,7 @@ static void app_activate(GApplication *app, gpointer *user_data) {
 	adw_toolbar_view_add_top_bar(ADW_TOOLBAR_VIEW(SidebarToolbar), SidebarHeader);
 	adw_toolbar_view_set_content(ADW_TOOLBAR_VIEW(SidebarToolbar), ScrolledWindow);
 
-	GtkWidget *SidebarPage = adw_navigation_page_new(SidebarToolbar, "sidebar-toolbar");
+	AdwNavigationPage *SidebarPage = adw_navigation_page_new(SidebarToolbar, "sidebar-toolbar");
 	adw_header_bar_set_show_title(ADW_HEADER_BAR(SidebarHeader), FALSE);
 
 	/* main */
@@ -49,7 +49,7 @@ static void app_activate(GApplication *app, gpointer *user_data) {
 	adw_toolbar_view_add_top_bar(ADW_TOOLBAR_VIEW(ContentToolbar), ContentHeader);
 	adw_toolbar_view_set_content(ADW_TOOLBAR_VIEW(ContentToolbar), StatusPage);
 
-	GtkWidget *ContentPage = adw_navigation_page_new(ContentToolbar, "Ivy");
+	AdwNavigationPage *ContentPage = adw_navigation_page_new(ContentToolbar, "Ivy");
 
 	adw_navigation_split_view_set_sidebar(ADW_NAVIGATION_SPLIT_VIEW(SplitView), ADW_NAVIGATION_PAGE(SidebarPage));
 	adw_navigation_split_view_set_content(ADW_NAVIGATION_SPLIT_VIEW(SplitView), ADW_NAVIGATION_PAGE(ContentPage));

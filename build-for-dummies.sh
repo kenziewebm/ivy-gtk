@@ -41,7 +41,48 @@ build_osx() {
 	tput bel
 }
 
-case "$(uname)" in
+build_msys() {
+	if [ -d build ]; then
+		echo "deleting build directory"
+		rm -r build
+	fi
+
+	if [ "$(which pkg-config)" != "/ucrt64/bin/pkg-config" ]; then
+		echo "error: pkg-config is not ucrt64"
+		echo "try running 'pacman -S mingw-w64-ucrt-x86_64-pkg-config"
+		exit
+	fi
+	echo "found ucrt64 pkg-config"
+
+	if [ "$(which cmake)" != "/ucrt64/bin/cmake" ]; then
+		echo "error: cmake is not ucrt64"
+		echo "try running 'pacman -S mingw-w64-ucrt-x86_64-cmake"
+		exit
+	fi
+	echo "found ucrt64 cmake"
+
+	if ! pkg-config gtk4; then 
+		echo "error: gtk4 not found by pkg-config"
+		echo "try running 'pacman -S mingw-w64-ucrt-x86_64-gtk4'"
+		exit
+	fi
+	echo "found gtk4"
+	
+	if ! pkg-config libadwaita-1; then
+		echo "error: libadwaita not found by pkg-config"
+		echo "try running 'pacman -S mingw-w64-ucrt-x86_64-libadwaita mingw-w64-ucrt-x86_64-adwaita-icon-theme'"
+		exit
+	fi
+	echo "found libadwaita"
+	echo "starting build (will notify when done)"
+	cmake -B build -S .
+	cmake --build build
+	cp build/ivy-gtk.exe .
+	echo "done"
+	tput bel
+}
+
+case "$(uname -o)" in
 	"Darwin") build_osx  ;;
 	"Linux")  build_linux;;
 	"Msys")   build_msys ;;

@@ -17,22 +17,21 @@ add_executable(ivy-gtk
     src/main.c
 )
 
+# we only include libadwaita's thingies because adwaita depends on gtk4
+# and 'ld' would warn about duplicates
+
 target_include_directories(ivy-gtk PRIVATE
-    ${GTK4_INCLUDE_DIRS}
     ${ADWAITA_INCLUDE_DIRS}
 )
 
 target_compile_options(ivy-gtk PRIVATE
-    ${GTK4_CFLAGS_OTHER}
     ${ADWAITA_CFLAGS_OTHER}
 )
 
 target_link_directories(ivy-gtk PRIVATE
-    ${GTK4_LIBRARY_DIRS}
     ${ADWAITA_LIBRARY_DIRS}
 )
 
 target_link_libraries(ivy-gtk PRIVATE
-    ${GTK4_LIBRARIES}
     ${ADWAITA_LIBRARIES}
 )
