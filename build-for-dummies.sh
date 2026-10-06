@@ -33,6 +33,13 @@ build_osx() {
 		exit
 	fi
 	echo "found libadwaita"
+
+	if ! pkgconf json-c; then
+		echo "error: json-c not found by pkgconf"
+		echo "try running 'brew install json-c'"
+		exit
+	fi
+
 	echo "starting build (will send notification when done)"
 	cmake -B build -S .
 	cmake --build build
@@ -73,6 +80,13 @@ build_msys() {
 		echo "try running 'pacman -S mingw-w64-ucrt-x86_64-libadwaita mingw-w64-ucrt-x86_64-adwaita-icon-theme'"
 		exit
 	fi
+
+	if ! pkg-config json-c; then
+		echo "error: json-c not found by pkg-config"
+		echo "try running 'pacman -S mingw-w64-ucrt-x86_64-json-c'"
+		exit
+	fi
+
 	echo "found libadwaita"
 	echo "starting build (will notify when done)"
 	cmake -B build -S .
