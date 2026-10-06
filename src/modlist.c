@@ -3,15 +3,13 @@
 #include <pthread.h>
 #include <json-c/json.h>
 
+#include "ui.h"
+
 typedef struct {
     const char *filepath;
     json_object *json_res;
     int status;
 } ExecTask;
-
-void mod_selected(AdwPreferencesRow *mod, gpointer user_data) {
-    g_print("clicked %d\n", GPOINTER_TO_INT(user_data));
-}
 
 void *get_mods_from_file(void* arg) {
     ExecTask *task = (ExecTask*)arg;
@@ -57,7 +55,7 @@ void *list_mods(void *arg) {
     pthread_exit(NULL);
 }
 */
-void fill_modlist(GtkWidget *ListBox) {
+void fill_modlist(GtkWidget *ListBox, GtkWidget *content) {
     pthread_t thread;
 /*
     ExecTask task = {
@@ -100,7 +98,7 @@ void fill_modlist(GtkWidget *ListBox) {
             sprintf(titles[i], "mod id %s", mod_name);
             Rows[i] = adw_button_row_new();
             adw_preferences_row_set_title(ADW_PREFERENCES_ROW(Rows[i]), titles[i]);
-            g_signal_connect(Rows[i], "activated", G_CALLBACK(mod_selected), GINT_TO_POINTER(i));
+            g_signal_connect(Rows[i], "activated", G_CALLBACK(mod_selected), content);
             gtk_list_box_append(GTK_LIST_BOX(ListBox), Rows[i]);
             i++;
         }

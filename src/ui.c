@@ -3,6 +3,15 @@
 
 #include "modlist.h"
 
+void mod_selected(AdwPreferencesRow *mod, gpointer user_data) {
+    GtkWidget *content = user_data;
+    GtkWidget *page = adw_status_page_new();
+    char title[128];
+    sprintf(title, "mod %s was clicked", adw_preferences_row_get_title(mod));
+    adw_status_page_set_title(ADW_STATUS_PAGE(page), title);
+    adw_toolbar_view_set_content(ADW_TOOLBAR_VIEW(content), page);
+}
+
 void app_activate(GApplication *app, gpointer *user_data) {
     g_print("[ui] init\n");
     GtkWidget *Window;
@@ -38,8 +47,6 @@ void app_activate(GApplication *app, gpointer *user_data) {
     GtkWidget *ListBox = gtk_list_box_new();
     gtk_widget_add_css_class(GTK_WIDGET(ListBox), "navigation-sidebar");
 
-    fill_modlist(ListBox);
-
     GtkWidget *ScrolledWindow = gtk_scrolled_window_new();
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(ScrolledWindow), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
     gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(ScrolledWindow), ListBox);
@@ -69,5 +76,8 @@ void app_activate(GApplication *app, gpointer *user_data) {
 
     adw_application_window_set_content(ADW_APPLICATION_WINDOW(Window), SplitView);	
     gtk_window_present(GTK_WINDOW(Window));
+
+    fill_modlist(ListBox, ContentToolbar);
+
     g_print("[ui] window presented\n");
 }
