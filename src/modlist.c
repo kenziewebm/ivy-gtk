@@ -4,6 +4,7 @@
 #include <json-c/json.h>
 
 #include "ui.h"
+#include "net.h"
 
 typedef struct {
     const char *filepath;
@@ -93,9 +94,10 @@ void fill_modlist(GtkWidget *ListBox, GtkWidget *content) {
         GtkWidget *Rows[20] = {0};
         char titles[20][128] = {0};
         int i = 0;
-        json_object_object_foreach(mods_obj, mod_name, mod_data) {
-            if (!json_object_is_type(mod_data, json_type_object)) continue;
-            sprintf(titles[i], "mod id %s", mod_name);
+        // todo: asyncify as well
+        json_object_object_foreach(mods_obj, mod_id, mod_data) {
+            char *name = get_mod_name(mod_id); 
+            sprintf(titles[i], "%s", name);
             Rows[i] = adw_button_row_new();
             adw_preferences_row_set_title(ADW_PREFERENCES_ROW(Rows[i]), titles[i]);
             g_signal_connect(Rows[i], "activated", G_CALLBACK(mod_selected), content);

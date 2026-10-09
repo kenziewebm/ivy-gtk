@@ -5,9 +5,9 @@
 
 void mod_selected(AdwPreferencesRow *mod, gpointer user_data) {
     GtkWidget *content = user_data;
-    GtkWidget *page = adw_status_page_new();
+    GtkWidget *page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
     char title[128];
-    sprintf(title, "mod %s was clicked", adw_preferences_row_get_title(mod));
+    sprintf(title, "%s was clicked", adw_preferences_row_get_title(mod));
     adw_status_page_set_title(ADW_STATUS_PAGE(page), title);
     adw_toolbar_view_set_content(ADW_TOOLBAR_VIEW(content), page);
 }

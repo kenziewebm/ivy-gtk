@@ -40,6 +40,12 @@ build_osx() {
 		exit
 	fi
 
+    if ! pkgconf libcurl; then
+        echo "error: libcurl not found bt pkgconf"
+        echo "try running 'brew install libcurl'"
+        exit
+    fi
+
 	echo "starting build (will send notification when done)"
 	cmake -B build -S .
 	cmake --build build
