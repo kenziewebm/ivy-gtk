@@ -2,14 +2,39 @@
 #include <libadwaita-1/adwaita.h>
 
 #include "modlist.h"
+#include "net.h"
 
 void mod_selected(AdwPreferencesRow *mod, gpointer user_data) {
-    GtkWidget *content = user_data;
-    GtkWidget *page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
-    char title[128];
-    sprintf(title, "%s was clicked", adw_preferences_row_get_title(mod));
-    adw_status_page_set_title(ADW_STATUS_PAGE(page), title);
-    adw_toolbar_view_set_content(ADW_TOOLBAR_VIEW(content), page);
+    GtkWidget *Content = user_data;
+    GtkWidget *Scrolled = gtk_scrolled_window_new();
+    GtkWidget *Clamp = adw_clamp_new();
+    GtkWidget *Box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+
+    ModInfo *info = g_object_get_data(G_OBJECT(mod), "mod-info");
+
+    GtkWidget *TitleLabel = gtk_label_new(info->name);
+    gtk_widget_add_css_class(TitleLabel, "title-1");
+    gtk_widget_set_margin_top(GTK_WIDGET(TitleLabel), 24);
+    gtk_box_append(GTK_BOX(Box), TitleLabel);
+
+    GtkWidget *AuthorLabel = gtk_label_new(info->author);
+    gtk_widget_add_css_class(AuthorLabel, "dim-label");
+    gtk_box_append(GTK_BOX(Box), AuthorLabel);
+
+    GFile *file = g_file_new_for_uri(info->image_url);
+    g_print("[debug] %s\n", info->image_url);
+    GtkWidget *Picture = gtk_picture_new_for_file(file);
+    g_object_unref(file);
+    gtk_box_append(GTK_BOX(Box), Picture);
+
+    GtkWidget *Description = gtk_label_new(info->desc);
+    gtk_widget_set_margin_top(GTK_WIDGET(Description), 15);
+    gtk_label_set_wrap(GTK_LABEL(Description), TRUE);
+    gtk_box_append(GTK_BOX(Box), Description);
+
+    adw_clamp_set_child(ADW_CLAMP(Clamp), Box);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(Scrolled), Clamp);
+    adw_toolbar_view_set_content(ADW_TOOLBAR_VIEW(Content), Scrolled);
 }
 
 void app_activate(GApplication *app, gpointer *user_data) {
