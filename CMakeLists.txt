@@ -20,6 +20,7 @@ add_executable(ivy-gtk
     src/ui.c
     src/modlist.c
     src/net.c
+    src/steam.c
 )
 
 # we only include libadwaita's thingies because adwaita depends on gtk4

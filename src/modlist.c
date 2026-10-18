@@ -5,6 +5,7 @@
 
 #include "ui.h"
 #include "net.h"
+#include "steam.h"
 
 typedef struct {
     const char *filepath;
@@ -78,8 +79,15 @@ void *get_mods_from_file(void* arg) {
 void fill_modlist(GtkWidget *ListBox, GtkWidget *content) {
     pthread_t thread;
 
+    char steam_folder[64];
+    char deadlock_folder[128];
+    get_steam_path(steam_folder, sizeof(steam_folder));
+    get_deadlock_path(steam_folder, deadlock_folder, sizeof(deadlock_folder));
+    char* filepath;
+    sprintf(filepath, "%s\\game\\citadel\\addons\\.dmm.json", deadlock_folder);
+
     ExecTask task = {
-        .filepath = "/users/kenzie/deadlock/game/citadel/addons/.dmm.json",
+	.filepath = filepath,
         .json_res = NULL,
         .status = 0
     };
