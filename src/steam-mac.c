@@ -25,7 +25,7 @@ int get_steam_path(char* out, int max_len) {
         return 1;
     } else {
         snprintf(out, max_len, "%s/steamapps/libraryfolders.vdf", steamdir);
-        fclose(fd);
+	fclose(fd);
         return 0;
     }
 }

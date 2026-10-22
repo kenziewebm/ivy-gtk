@@ -78,15 +78,23 @@ void *get_mods_from_file(void* arg) {
 
 void fill_modlist(GtkWidget *ListBox, GtkWidget *content) {
     pthread_t thread;
-    char* filepath;
+    char filepath[1024];
 
     /* first try hardcoded ~/deadlock, then resolve */
     char* homedir = getenv("HOME");
     char deaddir[256];
+#if defined(_WIN32)
+    sprintf(deaddir, "%s\\deadlock", homedir);
+#else
     sprintf(deaddir, "%s/deadlock", homedir);
+#endif
     FILE* fd = fopen(deaddir, "r");
     if (fd) {
+#if defined(_WIN32)
+        sprintf(filepath, "%s\\game\\citadel\\addons\\.dmm.json", deaddir);
+#else
         sprintf(filepath, "%s/game/citadel/addons/.dmm.json", deaddir);
+#endif
         g_print("%s\n", filepath);
         fclose(fd);
     }
@@ -97,6 +105,7 @@ void fill_modlist(GtkWidget *ListBox, GtkWidget *content) {
         get_deadlock_path(steam_folder, deadlock_folder, sizeof(deadlock_folder));
 #if defined(_WIN32)
         sprintf(filepath, "%s\\game\\citadel\\addons\\.dmm.json", deadlock_folder);
+	g_print("%s\n", filepath);
 #else
         sprintf(filepath, "%s/game/citadel/addons/.dmm.json", deadlock_folder);
 #endif

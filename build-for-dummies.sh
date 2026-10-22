@@ -90,14 +90,22 @@ build_msys() {
 		echo "try running 'pacman -S mingw-w64-ucrt-x86_64-libadwaita mingw-w64-ucrt-x86_64-adwaita-icon-theme'"
 		exit
 	fi
+	echo "found libadwaita"
 
 	if ! pkg-config json-c; then
 		echo "error: json-c not found by pkg-config"
 		echo "try running 'pacman -S mingw-w64-ucrt-x86_64-json-c'"
 		exit
 	fi
+	echo "found json-c"
 
-	echo "found libadwaita"
+	if ! [ -e "/ucrt64/include/pthread.h" ]; then
+		echo "error: winpthreads not found"
+		echo "try running 'pacman -S mingw-w64-ucrt-x86_64-winpthreads'"
+		exit
+	fi
+	echo "found winpthreads"
+
 	echo "starting build (will notify when done)"
 	cmake -B build -S .
 	cmake --build build

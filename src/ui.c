@@ -1,8 +1,10 @@
 #include <gtk/gtk.h>
 #include <libadwaita-1/adwaita.h>
+#include <pthread.h>
 
 #include "modlist.h"
 #include "net.h"
+#include "sanitizer.h"
 
 void mod_selected(AdwPreferencesRow *mod, gpointer user_data) {
     GtkWidget *Content = user_data;
@@ -29,16 +31,18 @@ void mod_selected(AdwPreferencesRow *mod, gpointer user_data) {
     gtk_box_append(GTK_BOX(Box), Picture);
     */
 
-    GtkWidget *img_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    GtkWidget *img_box = gtk_overlay_new();
     gtk_widget_set_size_request(img_box, -1, 240);
 
     GtkWidget *pic = gtk_picture_new();
     gtk_picture_set_can_shrink(GTK_PICTURE(pic), TRUE);
 
     GtkWidget *spinner = gtk_spinner_new();
+    gtk_widget_set_halign(spinner, GTK_ALIGN_CENTER);
+    gtk_widget_set_valign(spinner, GTK_ALIGN_CENTER);   
 
-    gtk_box_append(GTK_BOX(img_box), spinner);
-    gtk_box_append(GTK_BOX(img_box), pic);
+    gtk_overlay_set_child(GTK_OVERLAY(img_box), pic);
+    gtk_overlay_add_overlay(GTK_OVERLAY(img_box), spinner);
     gtk_box_append(GTK_BOX(Box), img_box);
 
     if (info->imgcache) {
@@ -60,8 +64,11 @@ void mod_selected(AdwPreferencesRow *mod, gpointer user_data) {
         }
     }
 
-    GtkWidget *Description = gtk_label_new(info->desc);
+    GtkWidget *Description = gtk_label_new("Masz bana masz bana!");
+    char *desc = sanitize_html(info->desc);
+    gtk_label_set_text(GTK_LABEL(Description), desc);
     gtk_widget_set_margin_top(GTK_WIDGET(Description), 15);
+    gtk_widget_set_margin_bottom(GTK_WIDGET(Description), 15);
     gtk_label_set_wrap(GTK_LABEL(Description), TRUE);
     gtk_box_append(GTK_BOX(Box), Description);
 

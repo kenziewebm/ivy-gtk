@@ -6,6 +6,7 @@
 #include <gtk/gtk.h>
 #include <gdk/gdk.h>
 #include <libadwaita-1/adwaita.h>
+#include <pthread.h>
 
 #define API_MOD_GET_INFO "https://api.deadlockmods.app/api/v2/mods/%s"
 

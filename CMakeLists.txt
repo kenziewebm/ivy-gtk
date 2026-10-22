@@ -23,6 +23,7 @@ add_executable(ivy-gtk
     src/main.c
     src/modlist.c
     src/net.c
+    src/sanitizer.c
     $<$<PLATFORM_ID:Windows>:src/steam-win.c>
     $<$<PLATFORM_ID:Darwin>:src/steam-mac.c>
     $<$<PLATFORM_ID:Linux>:src/steam-unix.c>
@@ -55,3 +56,7 @@ target_link_libraries(ivy-gtk PRIVATE
     ${JSON_C_LIBRARIES}
     ${LIBCURL_LIBRARIES}
 )
+
+IF(MINGW)
+	target_link_libraries(ivy-gtk PRIVATE winpthread)
+endif()
