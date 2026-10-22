@@ -59,7 +59,7 @@ void *get_mods_from_file(void* arg) {
     ExecTask *task = (ExecTask*)arg;
     FILE* fd = fopen(task->filepath, "r");
     if (fd == NULL) {
-        g_print("[modlist] popen failed\n");
+        g_print("[modlist] fopen failed\n");
         task->status = -1;
         pthread_exit(NULL);
     }
@@ -78,16 +78,32 @@ void *get_mods_from_file(void* arg) {
 
 void fill_modlist(GtkWidget *ListBox, GtkWidget *content) {
     pthread_t thread;
-
-    char steam_folder[64];
-    char deadlock_folder[128];
-    get_steam_path(steam_folder, sizeof(steam_folder));
-    get_deadlock_path(steam_folder, deadlock_folder, sizeof(deadlock_folder));
     char* filepath;
-    sprintf(filepath, "%s\\game\\citadel\\addons\\.dmm.json", deadlock_folder);
+
+    /* first try hardcoded ~/deadlock, then resolve */
+    char* homedir = getenv("HOME");
+    char deaddir[256];
+    sprintf(deaddir, "%s/deadlock", homedir);
+    FILE* fd = fopen(deaddir, "r");
+    if (fd) {
+        sprintf(filepath, "%s/game/citadel/addons/.dmm.json", deaddir);
+        g_print("%s\n", filepath);
+        fclose(fd);
+    }
+    else {
+        char steam_folder[512];
+        char deadlock_folder[1024];
+        get_steam_path(steam_folder, sizeof(steam_folder));
+        get_deadlock_path(steam_folder, deadlock_folder, sizeof(deadlock_folder));
+#if defined(_WIN32)
+        sprintf(filepath, "%s\\game\\citadel\\addons\\.dmm.json", deadlock_folder);
+#else
+        sprintf(filepath, "%s/game/citadel/addons/.dmm.json", deadlock_folder);
+#endif
+    }
 
     ExecTask task = {
-	.filepath = filepath,
+        .filepath = filepath,
         .json_res = NULL,
         .status = 0
     };
@@ -125,17 +141,17 @@ void fill_modlist(GtkWidget *ListBox, GtkWidget *content) {
                 free(task);
             }
         }
-/*
-            ModInfo *info = get_mod_info(mod_id); 
-            GtkWidget *Row = adw_button_row_new();
-            adw_preferences_row_set_title(ADW_PREFERENCES_ROW(Row), info->name);
-            g_object_set_data_full(G_OBJECT(Row), "mod-info", info, (GDestroyNotify)free_mod_info);
-            g_signal_connect(Row, "activated", G_CALLBACK(mod_selected), content);
-            gtk_list_box_append(GTK_LIST_BOX(ListBox), Row);
-        }
-*/
+        /*
+           ModInfo *info = get_mod_info(mod_id); 
+           GtkWidget *Row = adw_button_row_new();
+           adw_preferences_row_set_title(ADW_PREFERENCES_ROW(Row), info->name);
+           g_object_set_data_full(G_OBJECT(Row), "mod-info", info, (GDestroyNotify)free_mod_info);
+           g_signal_connect(Row, "activated", G_CALLBACK(mod_selected), content);
+           gtk_list_box_append(GTK_LIST_BOX(ListBox), Row);
+           }
+         */
         json_object_put(task.json_res);
-    } else {
-        g_print("[modlist] failed to list mods: %d\n", task.status);
-    }
+} else {
+    g_print("[modlist] failed to list mods: %d\n", task.status);
+}
 }

@@ -1,13 +1,11 @@
 /* this code should be illegal */
 
-#if defined(_WIN32)
-#include <windows.h>
-#endif
-
 #include <gtk/gtk.h>
 #include <libadwaita-1/adwaita.h>
 
-int get_steam_path_win(char* out, int max_len) {
+#include <windows.h>
+
+int get_steam_path(char* out, int max_len) {
 	HKEY hkey;
 	char installPath[MAX_PATH];
 	DWORD bufsize = sizeof(installPath);
@@ -91,12 +89,3 @@ int get_deadlock_path(char* library_path, char* out, int max_len) {
 		return 1;
 	}
 }
-
-#if defined(_WIN32)
-int get_steam_path(char* out, int max_len) { return get_steam_path_win(out, max_len); }
-#elif defined(__APPLE__)
-int get_steam_path(char* out, int max_len) { return get_steam_path_apple(out, max_len); }
-#else
-int get_steam_path(char* out, int max_len) { return get_steam_path_unix(out, max_len); }
-#endif
-

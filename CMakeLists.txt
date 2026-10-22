@@ -4,8 +4,12 @@ project(ivy-gtk C)
 
 set(CMAKE_C_STANDARD 11)
 
+
 if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
-    set(PKG_CONFIG_EXECUTABLE "/usr/local/bin/pkgconf")
+#    if(EXISTS "/opt/local/bin/pkgconf")
+        set(ENV{PKG_CONFIG_PATH} "/opt/local/share/pkgconfig")
+#        set(PKG_CONFIG_EXECUTABLE "/opt/local/bin/pkgconf" CACHE FILEPATH "pkgconf executable" FORCE)
+#    endif()
 endif()
 
 find_package(PkgConfig REQUIRED)
@@ -17,10 +21,12 @@ pkg_check_modules(LIBCURL REQUIRED libcurl)
 
 add_executable(ivy-gtk
     src/main.c
-    src/ui.c
     src/modlist.c
     src/net.c
-    src/steam.c
+    $<$<PLATFORM_ID:Windows>:src/steam-win.c>
+    $<$<PLATFORM_ID:Darwin>:src/steam-mac.c>
+    $<$<PLATFORM_ID:Linux>:src/steam-unix.c>
+    src/ui.c
 )
 
 # we only include libadwaita's thingies because adwaita depends on gtk4

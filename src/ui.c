@@ -21,11 +21,44 @@ void mod_selected(AdwPreferencesRow *mod, gpointer user_data) {
     gtk_widget_add_css_class(AuthorLabel, "dim-label");
     gtk_box_append(GTK_BOX(Box), AuthorLabel);
 
+    /*
     GFile *file = g_file_new_for_uri(info->image_url);
     g_print("[debug] %s\n", info->image_url);
     GtkWidget *Picture = gtk_picture_new_for_file(file);
     g_object_unref(file);
     gtk_box_append(GTK_BOX(Box), Picture);
+    */
+
+    GtkWidget *img_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_set_size_request(img_box, -1, 240);
+
+    GtkWidget *pic = gtk_picture_new();
+    gtk_picture_set_can_shrink(GTK_PICTURE(pic), TRUE);
+
+    GtkWidget *spinner = gtk_spinner_new();
+
+    gtk_box_append(GTK_BOX(img_box), spinner);
+    gtk_box_append(GTK_BOX(img_box), pic);
+    gtk_box_append(GTK_BOX(Box), img_box);
+
+    if (info->imgcache) {
+        gtk_picture_set_paintable(GTK_PICTURE(pic), GDK_PAINTABLE(info->imgcache));
+        gtk_widget_set_visible(spinner, FALSE);
+    } else if (info->image_url) {
+        gtk_spinner_start(GTK_SPINNER(spinner));
+        gtk_widget_set_visible(pic, FALSE);
+
+        AsyncImgTask *task = malloc(sizeof(AsyncImgTask));
+        task->url = strdup(info->image_url);
+        task->info = info;
+        g_weak_ref_init(&task->pic_ref, G_OBJECT(pic));
+        g_weak_ref_init(&task->spinner_ref, G_OBJECT(spinner));
+
+        pthread_t th;
+        if (pthread_create(&th, NULL, download_image_worker, task) == 0) {
+            pthread_detach(th);
+        }
+    }
 
     GtkWidget *Description = gtk_label_new(info->desc);
     gtk_widget_set_margin_top(GTK_WIDGET(Description), 15);

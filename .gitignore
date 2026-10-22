@@ -1,3 +1,7 @@
 build/
 ivy-gtk.exe
 ivy-gtk
+ivy-gtk.dSYM
+ivy-dbg
+deps.txt
+dep-walker.py

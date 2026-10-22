@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <gtk/gtk.h>
+#include <gdk/gdk.h>
+#include <libadwaita-1/adwaita.h>
 
 #define API_MOD_GET_INFO "https://api.deadlockmods.app/api/v2/mods/%s"
 
@@ -21,7 +24,20 @@ typedef struct {
     char *image_url;
     int likes;
     int downloads;
+    GdkTexture *imgcache;
 } ModInfo;
+
+typedef struct {
+    char *url;
+    ModInfo *info;
+    GWeakRef pic_ref;
+    GWeakRef spinner_ref;
+} AsyncImgTask;
+
+typedef struct {
+    GdkTexture *texture;
+    AsyncImgTask *task;
+} AsyncImgResult;
 
 void free_mod_info(ModInfo *info) {
     if (!info) return;
@@ -32,6 +48,7 @@ void free_mod_info(ModInfo *info) {
     free(info->category);
     free(info->hero);
     free(info->image_url);
+    if (info->imgcache) g_object_unref(info->imgcache);
     free(info);
 }
 
@@ -126,5 +143,80 @@ ModInfo *get_mod_info(const char *mod_id) {
     json_object_put(obj);
 
     return info;
+}
 
+GdkTexture *get_image_texture(const char *url) {
+    if (!url) return NULL;
+    CURL *curl = curl_easy_init();
+    if (!curl) return NULL;
+    struct response response = { .data = NULL, .size = 0 };
+
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+
+    CURLcode result = curl_easy_perform(curl);
+    curl_easy_cleanup(curl);
+
+    if (result != CURLE_OK) {
+        free(response.data);
+        return NULL;
+    }
+
+    GBytes *bytes = g_bytes_new_take(response.data, response.size);
+    GError *error = NULL;
+    GdkTexture *texture = gdk_texture_new_from_bytes(bytes, &error);
+    g_bytes_unref(bytes);
+
+    if (!texture) {
+        g_print("[net] failed to decode image: %s\n", error ? error->message : "unknown");
+        if (error) g_error_free(error);
+        return NULL;
+    }
+
+    return texture;
+}
+
+static gboolean on_image_downloaded(gpointer user_data) {
+    AsyncImgResult *res = (AsyncImgResult *)user_data;
+    AsyncImgTask *task = res->task;
+
+    GObject *pic_obj = g_weak_ref_get(&task->pic_ref);
+    GObject *spinner_obj = g_weak_ref_get(&task->spinner_ref);
+
+    if (res->texture) {
+        task->info->imgcache = g_object_ref(res->texture);
+        if (pic_obj) {
+            gtk_picture_set_paintable(GTK_PICTURE(pic_obj), GDK_PAINTABLE(res->texture));
+            gtk_widget_set_visible(GTK_WIDGET(pic_obj), TRUE);
+        }
+        g_object_unref(res->texture);
+    }
+
+    if (spinner_obj) {
+        gtk_spinner_stop(GTK_SPINNER(spinner_obj));
+        gtk_widget_set_visible(GTK_WIDGET(spinner_obj), FALSE);
+        g_object_unref(spinner_obj);
+    }
+
+    if(pic_obj) g_object_unref(pic_obj);
+
+    g_weak_ref_clear(&task->pic_ref);
+    g_weak_ref_clear(&task->spinner_ref);
+    free(task->url);
+    free(task);
+    free(res);
+    return G_SOURCE_REMOVE;
+}
+
+void *download_image_worker(void *arg) {
+    AsyncImgTask *task = (AsyncImgTask *)arg;
+    GdkTexture *texture = get_image_texture(task->url);
+    AsyncImgResult *res = malloc(sizeof(AsyncImgResult));
+    res->texture = texture;
+    res->task = task;
+
+    g_idle_add(on_image_downloaded, res);
+    pthread_exit(NULL);
 }

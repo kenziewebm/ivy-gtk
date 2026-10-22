@@ -1,50 +1,54 @@
 #!/usr/bin/env bash
 
 build_osx() {
+    export PKG_CONFIG_PATH="/opt/local/share/pkgconfig"
+	local pkgconf="/opt/local/bin/pkg-config"
+	local port_install="sudo port install pkgconfig cmake gtk4 libadwaita json-c curl"
+
 	if [ -d build ]; then
 		echo "deleting build directory"
 		rm -r build
 	fi
 
-	if [ "$(which pkgconf)" != "/usr/local/bin/pkgconf" ]; then
-		echo "error: pkgconf not installed in /usr/local/bin/pkgconf"
-		echo "try running 'brew install pkg-config'"
-		exit
+	if [ ! -x "$pkgconf" ]; then
+		echo "error: MacPorts pkgconf not found at $pkgconf"
+		echo "try running '$port_install'"
+		exit 1
 	fi
 	echo "found pkgconf"
 
-	if ! which cmake >/dev/null; then
+	if ! command -v cmake >/dev/null; then
 		echo "error: cmake not found in PATH"
-		echo "try running 'brew install cmake'"
-		exit
+		echo "try running 'sudo port install cmake'"
+		exit 1
 	fi
 	echo "found cmake"
 
-	if ! pkgconf gtk4; then
+	if ! "$pkgconf" --exists gtk4; then
 		echo "error: gtk4 not found by pkgconf"
-		echo "try running 'brew install gtk4'"
-		exit
+		echo "try running 'sudo port install gtk4'"
+		exit 1
 	fi
 	echo "found gtk4"
 
-	if ! pkgconf libadwaita-1; then
+	if ! "$pkgconf" --exists libadwaita-1; then
 		echo "error: libadwaita not found by pkgconf"
-		echo "try running 'brew install libadwaita adwaita-icon-theme'"
-		exit
+		echo "try running 'sudo port install libadwaita'"
+		exit 1
 	fi
 	echo "found libadwaita"
 
-	if ! pkgconf json-c; then
+	if ! "$pkgconf" --exists json-c; then
 		echo "error: json-c not found by pkgconf"
-		echo "try running 'brew install json-c'"
-		exit
+		echo "try running 'sudo port install json-c'"
+		exit 1
 	fi
 
-    if ! pkgconf libcurl; then
-        echo "error: libcurl not found bt pkgconf"
-        echo "try running 'brew install libcurl'"
-        exit
-    fi
+	if ! "$pkgconf" --exists libcurl; then
+		echo "error: libcurl not found by pkgconf"
+		echo "try running 'sudo port install curl'"
+		exit 1
+	fi
 
 	echo "starting build (will send notification when done)"
 	cmake -B build -S .
