@@ -95,7 +95,6 @@ void fill_modlist(GtkWidget *ListBox, GtkWidget *content) {
 #else
         sprintf(filepath, "%s/game/citadel/addons/.dmm.json", deaddir);
 #endif
-        g_print("%s\n", filepath);
         fclose(fd);
     }
     else {

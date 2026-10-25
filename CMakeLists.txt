@@ -27,6 +27,7 @@ add_executable(ivy-gtk
     $<$<PLATFORM_ID:Windows>:src/steam-win.c>
     $<$<PLATFORM_ID:Darwin>:src/steam-mac.c>
     $<$<PLATFORM_ID:Linux>:src/steam-unix.c>
+    src/installer.c
     src/ui.c
 )
 
