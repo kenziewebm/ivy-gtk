@@ -7,6 +7,42 @@
 #include "sanitizer.h"
 #include "installer.h"
 
+static void delete_response(AdwAlertDialog *dialog, const char *response, gpointer user_data) {
+	if (strcmp(response, "delete") != 0) return;
+	GtkWidget *row = g_object_get_data(G_OBJECT(dialog), "row");
+	GtkWidget *content = g_object_get_data(G_OBJECT(dialog), "content");
+	GtkWidget *details = g_object_get_data(G_OBJECT(dialog), "details");
+	const char *mod_id = g_object_get_data(G_OBJECT(row), "mod-id");
+	if (delete_mod(mod_id) != 0) {
+		AdwDialog *error = adw_alert_dialog_new("Couldn't delete mod", "Check the terminal for details.");
+		adw_alert_dialog_add_response(ADW_ALERT_DIALOG(error), "ok", "OK");
+		adw_dialog_present(error, content);
+		return;
+	}
+	if (adw_toolbar_view_get_content(ADW_TOOLBAR_VIEW(content)) == details) {
+		GtkWidget *status = adw_status_page_new();
+		adw_status_page_set_title(ADW_STATUS_PAGE(status), "Select a mod");
+		adw_toolbar_view_set_content(ADW_TOOLBAR_VIEW(content), status);
+	}
+	GtkWidget *list = gtk_widget_get_parent(row);
+	if (list) gtk_list_box_remove(GTK_LIST_BOX(list), row);
+}
+
+static void delete_clicked(GtkButton *button, gpointer user_data) {
+	GtkWidget *row = GTK_WIDGET(user_data);
+	GtkWidget *content = g_object_get_data(G_OBJECT(button), "content");
+	GtkWidget *details = g_object_get_data(G_OBJECT(button), "details");
+	AdwDialog *dialog = adw_alert_dialog_new("Delete mod?", "Are you sure you want to delete this mod?");
+	adw_alert_dialog_add_responses(ADW_ALERT_DIALOG(dialog), "cancel", "Cancel", "delete", "Delete", NULL);
+	adw_alert_dialog_set_response_appearance(ADW_ALERT_DIALOG(dialog), "delete", ADW_RESPONSE_DESTRUCTIVE);
+	adw_alert_dialog_set_close_response(ADW_ALERT_DIALOG(dialog), "cancel");
+	g_object_set_data_full(G_OBJECT(dialog), "row", g_object_ref(row), g_object_unref);
+	g_object_set_data_full(G_OBJECT(dialog), "content", g_object_ref(content), g_object_unref);
+	g_object_set_data_full(G_OBJECT(dialog), "details", g_object_ref(details), g_object_unref);
+	g_signal_connect(dialog, "response", G_CALLBACK(delete_response), NULL);
+	adw_dialog_present(dialog, content);
+}
+
 void mod_selected(AdwPreferencesRow *mod, gpointer user_data) {
 	GtkWidget *Content = user_data;
 	GtkWidget *Scrolled = gtk_scrolled_window_new();
@@ -23,14 +59,6 @@ void mod_selected(AdwPreferencesRow *mod, gpointer user_data) {
 	GtkWidget *AuthorLabel = gtk_label_new(info->author);
 	gtk_widget_add_css_class(AuthorLabel, "dim-label");
 	gtk_box_append(GTK_BOX(Box), AuthorLabel);
-
-	/*
-	   GFile *file = g_file_new_for_uri(info->image_url);
-	   g_print("[debug] %s\n", info->image_url);
-	   GtkWidget *Picture = gtk_picture_new_for_file(file);
-	   g_object_unref(file);
-	   gtk_box_append(GTK_BOX(Box), Picture);
-	   */
 
 	if (info->image_url) {
 		GtkWidget *img_box = gtk_overlay_new();
@@ -74,6 +102,15 @@ void mod_selected(AdwPreferencesRow *mod, gpointer user_data) {
 	gtk_widget_set_margin_bottom(GTK_WIDGET(Description), 15);
 	gtk_label_set_wrap(GTK_LABEL(Description), TRUE);
 	gtk_box_append(GTK_BOX(Box), Description);
+
+    GtkWidget *deletemod = gtk_button_new_with_label("Delete mod");
+    gtk_widget_add_css_class(deletemod, "destructive-action");
+    gtk_widget_set_halign(deletemod, GTK_ALIGN_END);
+    gtk_widget_set_margin_bottom(deletemod, 15);
+    g_object_set_data(G_OBJECT(deletemod), "content", Content);
+    g_object_set_data(G_OBJECT(deletemod), "details", Scrolled);
+    g_signal_connect(deletemod, "clicked", G_CALLBACK(delete_clicked), mod);
+    gtk_box_append(GTK_BOX(Box), deletemod);
 
 	adw_clamp_set_child(ADW_CLAMP(Clamp), Box);
 	gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(Scrolled), Clamp);
@@ -140,6 +177,8 @@ void app_activate(GApplication *app, gpointer *user_data) {
 	adw_status_page_set_title(ADW_STATUS_PAGE(StatusPage), "Select a mod");
 
 	GtkWidget *ContentToolbar = adw_toolbar_view_new();
+	g_object_set_data(G_OBJECT(Window), "mod-list", ListBox);
+	g_object_set_data(G_OBJECT(Window), "mod-content", ContentToolbar);
 	adw_toolbar_view_add_top_bar(ADW_TOOLBAR_VIEW(ContentToolbar), ContentHeader);
 	adw_toolbar_view_set_content(ADW_TOOLBAR_VIEW(ContentToolbar), StatusPage);
 

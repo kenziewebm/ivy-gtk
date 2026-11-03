@@ -32,6 +32,7 @@ const char *get_json_string(json_object *obj, const char *key);
 signed int get_json_int(json_object *obj, const char *key, int fallback);
 static char *strdup_safe(const char *s);
 ModInfo *get_mod_info(const char *mod_id);
+ModInfo *parse_mod_json(const char *mod_id, json_object *obj);
 static gboolean on_image_downloaded(gpointer user_data);
 GdkTexture *get_image_texture(const char* url);
 void *download_image_worker(void *arg);

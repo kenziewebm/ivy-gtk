@@ -1,123 +1,114 @@
 #!/usr/bin/env bash
 
-build_osx() {
-    export PKG_CONFIG_PATH="/opt/local/share/pkgconfig"
-	local pkgconf="/opt/local/bin/pkg-config"
-	local port_install="sudo port install pkgconfig cmake gtk4 libadwaita json-c curl"
+set -e
 
-	if [ -d build ]; then
-		echo "deleting build directory"
-		rm -r build
-	fi
+build_project() {
+	echo "starting build"
+	cmake -B build -S .
+	cmake --build build
+	cp "build/ivy-gtk${1:-}" .
+	echo "done"
+	tput bel 2>/dev/null || true
+}
+
+build_osx() {
+	export PKG_CONFIG_PATH="/opt/local/share/pkgconfig"
+	local pkgconf="/opt/local/bin/pkg-config"
 
 	if [ ! -x "$pkgconf" ]; then
-		echo "error: MacPorts pkgconf not found at $pkgconf"
-		echo "try running '$port_install'"
+		echo "error: MacPorts pkg-config not found at $pkgconf"
+		echo "try running 'sudo port install pkgconfig'"
 		exit 1
 	fi
-	echo "found pkgconf"
 
 	if ! command -v cmake >/dev/null; then
 		echo "error: cmake not found in PATH"
 		echo "try running 'sudo port install cmake'"
 		exit 1
 	fi
-	echo "found cmake"
 
-	if ! "$pkgconf" --exists gtk4; then
-		echo "error: gtk4 not found by pkgconf"
-		echo "try running 'sudo port install gtk4'"
-		exit 1
-	fi
-	echo "found gtk4"
+	for dep in gtk4 libadwaita-1 json-c libcurl libarchive; do
+		local package="$dep"
+		case "$dep" in
+			libadwaita-1) package="libadwaita" ;;
+			libcurl) package="curl" ;;
+		esac
+		if ! "$pkgconf" --exists "$dep"; then
+			echo "error: $dep not found by pkg-config"
+			echo "try running 'sudo port install $package'"
+			exit 1
+		fi
+		echo "found $dep"
+	done
 
-	if ! "$pkgconf" --exists libadwaita-1; then
-		echo "error: libadwaita not found by pkgconf"
-		echo "try running 'sudo port install libadwaita'"
-		exit 1
-	fi
-	echo "found libadwaita"
-
-	if ! "$pkgconf" --exists json-c; then
-		echo "error: json-c not found by pkgconf"
-		echo "try running 'sudo port install json-c'"
-		exit 1
-	fi
-
-	if ! "$pkgconf" --exists libcurl; then
-		echo "error: libcurl not found by pkgconf"
-		echo "try running 'sudo port install curl'"
-		exit 1
-	fi
-
-	echo "starting build (will send notification when done)"
-	cmake -B build -S .
-	cmake --build build
-	cp build/ivy-gtk .
-	echo "done"
-	tput bel
-}
-
-build_msys() {
 	if [ -d build ]; then
 		echo "deleting build directory"
 		rm -r build
 	fi
+	build_project
+}
 
-	if [ "$(which pkg-config)" != "/ucrt64/bin/pkg-config" ]; then
-		echo "error: pkg-config is not ucrt64"
-		echo "try running 'pacman -S mingw-w64-ucrt-x86_64-pkg-config"
-		exit
-	fi
-	echo "found ucrt64 pkg-config"
+build_linux() {
+	for tool in cmake pkg-config cc make; do
+		if ! command -v "$tool" >/dev/null; then
+			echo "error: $tool not found in PATH"
+			echo "install $tool with your package manager"
+			exit 1
+		fi
+	done
 
-	if [ "$(which cmake)" != "/ucrt64/bin/cmake" ]; then
-		echo "error: cmake is not ucrt64"
-		echo "try running 'pacman -S mingw-w64-ucrt-x86_64-cmake"
-		exit
-	fi
-	echo "found ucrt64 cmake"
+	for dep in gtk4 libadwaita-1 json-c libcurl libarchive; do
+		if ! pkg-config --exists "$dep"; then
+			echo "error: $dep not found by pkg-config"
+			echo "install ${dep%-1} with your package manager"
+			exit 1
+		fi
+		echo "found $dep"
+	done
+	build_project
+}
 
-	if ! pkg-config gtk4; then 
-		echo "error: gtk4 not found by pkg-config"
-		echo "try running 'pacman -S mingw-w64-ucrt-x86_64-gtk4'"
-		exit
-	fi
-	echo "found gtk4"
-	
-	if ! pkg-config libadwaita-1; then
-		echo "error: libadwaita not found by pkg-config"
-		echo "try running 'pacman -S mingw-w64-ucrt-x86_64-libadwaita mingw-w64-ucrt-x86_64-adwaita-icon-theme'"
-		exit
-	fi
-	echo "found libadwaita"
+build_msys() {
+	for tool in pkg-config cmake; do
+		if [ "$(command -v "$tool")" != "/ucrt64/bin/$tool" ]; then
+			echo "error: $tool is not ucrt64"
+			echo "try running 'pacman -S mingw-w64-ucrt-x86_64-$tool'"
+			exit 1
+		fi
+		echo "found ucrt64 $tool"
+	done
 
-	if ! pkg-config json-c; then
-		echo "error: json-c not found by pkg-config"
-		echo "try running 'pacman -S mingw-w64-ucrt-x86_64-json-c'"
-		exit
-	fi
-	echo "found json-c"
+	for dep in gtk4 libadwaita-1 json-c libcurl libarchive; do
+		local package="$dep"
+		case "$dep" in
+			libadwaita-1) package="libadwaita mingw-w64-ucrt-x86_64-adwaita-icon-theme" ;;
+			libcurl) package="curl" ;;
+		esac
+		if ! pkg-config --exists "$dep"; then
+			echo "error: $dep not found by pkg-config"
+			echo "try running 'pacman -S mingw-w64-ucrt-x86_64-$package'"
+			exit 1
+		fi
+		echo "found $dep"
+	done
 
-	if ! [ -e "/ucrt64/include/pthread.h" ]; then
+	if [ ! -e "/ucrt64/include/pthread.h" ]; then
 		echo "error: winpthreads not found"
 		echo "try running 'pacman -S mingw-w64-ucrt-x86_64-winpthreads'"
-		exit
+		exit 1
 	fi
 	echo "found winpthreads"
 
-	echo "starting build (will notify when done)"
-	cmake -B build -S .
-	cmake --build build
-	cp build/ivy-gtk.exe .
-	echo "done"
-	tput bel
+	if [ -d build ]; then
+		echo "deleting build directory"
+		rm -r build
+	fi
+	build_project .exe
 }
 
-case "$(uname -o)" in
-	"Darwin") build_osx  ;;
-	"Linux")  build_linux;;
-	"Msys")   build_msys ;;
-	*) echo "Unsupported OS!"; exit;;
+case "$(uname -s)" in
+	Darwin) build_osx ;;
+	Linux) build_linux ;;
+	MSYS*|MINGW*) build_msys ;;
+	*) echo "Unsupported OS!"; exit 1 ;;
 esac
-
