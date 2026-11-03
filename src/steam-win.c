@@ -1,91 +1,69 @@
-/* this code should be illegal */
-
-#include <gtk/gtk.h>
-#include <libadwaita-1/adwaita.h>
-
+#include <glib.h>
+#include <stdio.h>
+#include <string.h>
 #include <windows.h>
 
-int get_steam_path(char* out, int max_len) {
-	HKEY hkey;
-	char installPath[MAX_PATH];
-	DWORD bufsize = sizeof(installPath);
+#include "steam.h"
+
+int get_steam_path(char *out, int max_len) {
+	HKEY key;
+	char install_path[MAX_PATH];
+	DWORD size = sizeof(install_path);
 	DWORD type;
+	out[0] = '\0';
 
-	LONG result = RegOpenKeyExA(
-		HKEY_LOCAL_MACHINE,
-		"SOFTWARE\\Valve\\Steam",
-		0,
-		KEY_READ | KEY_WOW64_64KEY,
-		&hkey
-	);
-
+	LONG result = RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Valve\\Steam", 0,
+		KEY_READ | KEY_WOW64_64KEY, &key);
 	if (result != ERROR_SUCCESS) {
-		g_print("[steam] regopenkeyex failed: %ld\n", result);
+		g_print("[steam] couldn't open Steam registry key: %ld\n", result);
 		return 1;
 	}
-
-	result = RegQueryValueExA(
-		hkey,
-		"InstallPath",
-		NULL,
-		&type,
-		(LPBYTE)installPath,
-		&bufsize
-	);
-
-	RegCloseKey(hkey);
-
+	result = RegQueryValueExA(key, "InstallPath", NULL, &type, (LPBYTE)install_path, &size);
+	RegCloseKey(key);
 	if (result != ERROR_SUCCESS || type != REG_SZ) {
-		g_print("[steam] failed to get key: %ld\n", result);
+		g_print("[steam] couldn't read InstallPath: %ld\n", result);
 		return 1;
 	}
-
-	installPath[sizeof(installPath) - 1] = '\0';
-
-	g_print("[steam] steam at: %s\n", installPath);
-
-	snprintf(out, max_len, "%s\\steamapps\\libraryfolders.vdf", installPath);
+	install_path[sizeof(install_path) - 1] = '\0';
+	char *path = g_build_filename(install_path, "steamapps", "libraryfolders.vdf", NULL);
+	gboolean found = g_file_test(path, G_FILE_TEST_IS_REGULAR);
+	if (found) g_strlcpy(out, path, max_len);
+	else g_print("[steam] couldn't find libraryfolders.vdf\n");
+	g_free(path);
+	return found ? 0 : 1;
 }
 
-int get_deadlock_path(char* library_path, char* out, int max_len) {
-	g_print("[steam] %s\n", library_path);
-	FILE* fd = fopen(library_path, "r");
-	char current_folder[256];
-	char line[256];
-	if (fd != NULL) {
-		while (fgets(line, sizeof(line), fd)) {
-			char* pos = strstr(line, "path");
-			if (pos) {
-				int i = 0;
-				char* tok = strtok(line, "\"");
-				while (tok != 0) {
-					if (i == 3) {
-					       strcpy(current_folder, tok);
-					       g_print("[library] %s\n", current_folder);
-					}
-					tok = strtok(0, "\"");
-					i++;
-				}
-			}
-			char* posi = strstr(line, "\"1422450\"");
-			if (posi) {
-				int i = 0;
-				char* tok = strtok(line, "\"");
-				while (tok != 0) {
-					if (i == 2) {
-						sprintf(out, "%s\\steamapps\\common\\Deadlock", current_folder);
-						g_print("[library] deadlock at %s\n", out);
-						return 0;
-					}
-					tok = strtok(0, "\"");
-					i++;
-				}
-			}
+int get_deadlock_path(char *library_path, char *out, int max_len) {
+	FILE *fd = fopen(library_path, "r");
+	char folder[1024] = "";
+	char line[2048];
+	out[0] = '\0';
+	if (!fd) return 1;
+	while (fgets(line, sizeof(line), fd)) {
+		char *key = strchr(line, '"');
+		if (!key) continue;
+		char *end = strchr(++key, '"');
+		if (!end) continue;
+		*end = '\0';
+		if (!strcmp(key, "path")) {
+			char *value = strchr(end + 1, '"');
+			if (!value) continue;
+			end = strchr(++value, '"');
+			if (!end) continue;
+			*end = '\0';
+			char *decoded = g_strcompress(value);
+			g_strlcpy(folder, decoded, sizeof(folder));
+			g_free(decoded);
 		}
-		fclose(fd);
-		return 1;
-	} else {
-		g_print("[steam] fopen fail?\n");
-		return 1;
+		if (!strcmp(key, "1422450") && folder[0]) {
+			char *path = g_build_filename(folder, "steamapps", "common", "Deadlock", NULL);
+			g_strlcpy(out, path, max_len);
+			g_free(path);
+			fclose(fd);
+			return 0;
+		}
 	}
+	fclose(fd);
+	g_print("[steam] couldn't find Deadlock in Steam libraries\n");
+	return 1;
 }

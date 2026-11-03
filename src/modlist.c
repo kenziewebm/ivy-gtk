@@ -2,10 +2,27 @@
 #include <libadwaita-1/adwaita.h>
 #include <pthread.h>
 #include <json-c/json.h>
+#include <errno.h>
 
 #include "ui.h"
 #include "net.h"
 #include "steam.h"
+
+static char manifest_path[1024];
+
+const char *get_manifest_path(void) {
+    return manifest_path;
+}
+
+void append_mod(GtkWidget *list, GtkWidget *content, ModInfo *info) {
+    GtkWidget *row = adw_button_row_new();
+    adw_preferences_row_set_use_markup(ADW_PREFERENCES_ROW(row), FALSE);
+    adw_preferences_row_set_title(ADW_PREFERENCES_ROW(row), info->name);
+    g_object_set_data_full(G_OBJECT(row), "mod-info", info, (GDestroyNotify)free_mod_info);
+    g_object_set_data_full(G_OBJECT(row), "mod-id", g_strdup(info->id), g_free);
+    g_signal_connect(row, "activated", G_CALLBACK(mod_selected), content);
+    gtk_list_box_append(GTK_LIST_BOX(list), row);
+}
 
 typedef struct {
     const char *filepath;
@@ -28,13 +45,7 @@ typedef struct {
 static gboolean on_mod_info_ready(gpointer user_data) {
     ModUiPayload *payload = (ModUiPayload *)user_data;
     if (payload->info != NULL) {
-        GtkWidget *Row = adw_button_row_new();
-        adw_preferences_row_set_title(ADW_PREFERENCES_ROW(Row), payload->info->name);
-
-        g_object_set_data_full(G_OBJECT(Row), "mod-info", payload->info, (GDestroyNotify)free_mod_info);
-        g_signal_connect(Row, "activated", G_CALLBACK(mod_selected), payload->content);
-
-        gtk_list_box_append(GTK_LIST_BOX(payload->list_box), Row);
+        append_mod(payload->list_box, payload->content, payload->info);
     }
     g_free(payload);
     return G_SOURCE_REMOVE;
@@ -78,7 +89,8 @@ void *get_mods_from_file(void* arg) {
 
 void fill_modlist(GtkWidget *ListBox, GtkWidget *content) {
     pthread_t thread;
-    char filepath[1024];
+    char *filepath = manifest_path;
+    filepath[0] = '\0';
 
     /* first try hardcoded ~/deadlock, then resolve */
     char* homedir = getenv("HOME");
@@ -95,14 +107,16 @@ void fill_modlist(GtkWidget *ListBox, GtkWidget *content) {
 #else
         sprintf(filepath, "%s/game/citadel/addons/.dmm.json", deaddir);
 #endif
-        g_print("%s\n", filepath);
         fclose(fd);
     }
     else {
         char steam_folder[512];
         char deadlock_folder[1024];
-        get_steam_path(steam_folder, sizeof(steam_folder));
-        get_deadlock_path(steam_folder, deadlock_folder, sizeof(deadlock_folder));
+        if (get_steam_path(steam_folder, sizeof(steam_folder)) != 0 ||
+            get_deadlock_path(steam_folder, deadlock_folder, sizeof(deadlock_folder)) != 0) {
+            g_print("[modlist] couldn't find Deadlock\n");
+            return;
+        }
 #if defined(_WIN32)
         sprintf(filepath, "%s\\game\\citadel\\addons\\.dmm.json", deadlock_folder);
 	g_print("%s\n", filepath);
@@ -163,4 +177,43 @@ void fill_modlist(GtkWidget *ListBox, GtkWidget *content) {
 } else {
     g_print("[modlist] failed to list mods: %d\n", task.status);
 }
+}
+
+int delete_mod(const char *mod_id) {
+    json_object *manifest = json_object_from_file(manifest_path);
+    json_object *mods, *mod, *files;
+    if (!manifest) return -1;
+    if (!json_object_object_get_ex(manifest, "mods", &mods) ||
+        !json_object_object_get_ex(mods, mod_id, &mod)) {
+        json_object_put(manifest);
+        return -1;
+    }
+
+    char *addons = g_path_get_dirname(manifest_path);
+    const char *fields[] = {"currentVpks", "disabledVpks"};
+    for (int i = 0; i < 2; i++) {
+        if (!json_object_object_get_ex(mod, fields[i], &files)) continue;
+        if (!json_object_is_type(files, json_type_array)) goto failed;
+        for (size_t j = 0; j < json_object_array_length(files); j++) {
+            json_object *item = json_object_array_get_idx(files, j);
+            if (!json_object_is_type(item, json_type_string)) goto failed;
+            const char *name = json_object_get_string(item);
+            if (!name[0] || strchr(name, '/') || strchr(name, '\\') || !strcmp(name, ".") || !strcmp(name, "..")) goto failed;
+            char *path = g_build_filename(addons, name, NULL);
+            int result = remove(path);
+            g_free(path);
+            if (result != 0 && errno != ENOENT) goto failed;
+        }
+    }
+    json_object_object_del(mods, mod_id);
+    if (json_object_to_file_ext(manifest_path, manifest, JSON_C_TO_STRING_PRETTY) != 0) goto failed;
+    g_free(addons);
+    json_object_put(manifest);
+    return 0;
+
+failed:
+    g_print("[modlist] failed to delete mod %s\n", mod_id);
+    g_free(addons);
+    json_object_put(manifest);
+    return -1;
 }
