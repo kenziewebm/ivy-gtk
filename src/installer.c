@@ -1,6 +1,5 @@
 #include <gtk/gtk.h>
 #include <libadwaita-1/adwaita.h>
-#include <curl/curl.h>
 #include <archive.h>
 #include <archive_entry.h>
 #include <glib/gstdio.h>
@@ -11,15 +10,14 @@
 #include <time.h>
 
 #include "modlist.h"
+#include "net.h"
 #include "sanitizer.h"
 #include "installer.h"
+#include "ui.h"
 
 #define PAGE_BTN_COUNT 4
 #define PAGE_SIZE 25
 #define VPK_LIMIT 99
-#ifndef API
-#define API "https://api.deadlockmods.app/api/v2/mods"
-#endif
 
 typedef struct {
 	AdwDialog *dialog;
@@ -51,11 +49,6 @@ typedef struct {
 	json_object *files;
 } InstallTask;
 
-typedef struct {
-	GString *body;
-	char *etag;
-} Response;
-
 static json_object *catalog_cache;
 static gint64 catalog_checked;
 static AdwDialog *install_dialog;
@@ -71,62 +64,6 @@ static const char *text_field(json_object *obj, const char *key) {
 
 static void free_json(gpointer obj) {
 	if (obj) json_object_put(obj);
-}
-
-static size_t receive_body(char *data, size_t size, size_t count, void *user_data) {
-	Response *r = user_data;
-	g_string_append_len(r->body, data, size * count);
-	return size * count;
-}
-
-static size_t receive_header(char *data, size_t size, size_t count, void *user_data) {
-	Response *r = user_data;
-	size_t length = size * count;
-	if (length > 5 && !g_ascii_strncasecmp(data, "etag:", 5)) {
-		g_free(r->etag);
-		r->etag = g_strstrip(g_strndup(data + 5, length - 5));
-	}
-	return length;
-}
-
-static CURL *new_request(const char *url) {
-	CURL *curl = curl_easy_init();
-	if (!curl) return NULL;
-	curl_easy_setopt(curl, CURLOPT_URL, url);
-	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-	curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
-	curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
-	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 20L);
-	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 600L);
-	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
-	return curl;
-}
-
-static json_object *fetch_json(const char *url, const char *etag, char **new_etag, long *status) {
-	CURL *curl = new_request(url);
-	if (!curl) return NULL;
-	Response response = {.body = g_string_new(NULL)};
-	struct curl_slist *headers = NULL;
-	if (etag && etag[0]) {
-		char *header = g_strdup_printf("If-None-Match: %s", etag);
-		headers = curl_slist_append(headers, header);
-		g_free(header);
-		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-	}
-	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, receive_body);
-	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-	curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, receive_header);
-	curl_easy_setopt(curl, CURLOPT_HEADERDATA, &response);
-	CURLcode result = curl_easy_perform(curl);
-	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, status);
-	json_object *obj = result == CURLE_OK ? json_tokener_parse(response.body->str) : NULL;
-	if (result != CURLE_OK) g_print("[installer] %s: %s\n", url, curl_easy_strerror(result));
-	if (new_etag) *new_etag = response.etag;
-	else g_free(response.etag);
-	g_string_free(response.body, TRUE);
-	curl_slist_free_all(headers);
-	curl_easy_cleanup(curl);
-	return obj;
 }
 
 static gboolean save_json(const char *path, json_object *obj, GError **error) {
@@ -157,7 +94,7 @@ static void catalog_worker(GTask *task, gpointer source, gpointer task_data, GCa
 	if (refresh || !r->catalog) {
 		long status = 0;
 		char *etag = NULL;
-		json_object *fresh = fetch_json(API, r->catalog && meta ? text_field(meta, "etag") : NULL, &etag, &status);
+		json_object *fresh = get_mod_catalog(r->catalog && meta ? text_field(meta, "etag") : NULL, &etag, &status);
 		gboolean success = status == 304 && r->catalog;
 		if (fresh && json_object_is_type(fresh, json_type_array)) {
 			if (r->catalog) json_object_put(r->catalog);
@@ -272,10 +209,7 @@ static void free_download_task(gpointer data) {
 
 static void downloads_worker(GTask *task, gpointer source, gpointer task_data, GCancellable *cancel) {
 	DownloadTask *job = task_data;
-	char *url = g_strdup_printf(API "/%s/downloads", job->id);
-	long status = 0;
-	json_object *obj = fetch_json(url, NULL, NULL, &status);
-	g_free(url);
+	json_object *obj = get_mod_downloads(job->id);
 	g_task_return_pointer(task, obj, free_json);
 }
 
@@ -464,26 +398,6 @@ static void free_install_task(gpointer data) {
 	g_free(job->id);
 	json_object_put(job->files);
 	g_free(job);
-}
-
-static gboolean download_file(const char *url, const char *path, GError **error) {
-	CURL *curl = new_request(url);
-	FILE *file = g_fopen(path, "wb");
-	if (!curl || !file) {
-		if (curl) curl_easy_cleanup(curl);
-		if (file) fclose(file);
-		g_set_error_literal(error, G_IO_ERROR, G_IO_ERROR_FAILED, "Couldn't create the download.");
-		return FALSE;
-	}
-	curl_easy_setopt(curl, CURLOPT_WRITEDATA, file);
-	CURLcode result = curl_easy_perform(curl);
-	int closed = fclose(file);
-	curl_easy_cleanup(curl);
-	if (result != CURLE_OK || closed != 0) {
-		g_set_error(error, G_IO_ERROR, G_IO_ERROR_FAILED, "Download failed: %s", result != CURLE_OK ? curl_easy_strerror(result) : "couldn't save file");
-		return FALSE;
-	}
-	return TRUE;
 }
 
 /* Flatten into our temp directory; archive paths never become filesystem paths. */
@@ -725,9 +639,7 @@ static void pane_closed(AdwDialog *dialog, gpointer data) {
 void mod_pane(gpointer user_data) {
 	if (install_dialog) { adw_dialog_present(install_dialog, user_data); return; }
 	if (!get_manifest_path()[0]) {
-		AdwDialog *error = adw_alert_dialog_new("Couldn't find Deadlock", "Install Deadlock through Steam or place the game in ~/deadlock.");
-		adw_alert_dialog_add_response(ADW_ALERT_DIALOG(error), "ok", "OK");
-		adw_dialog_present(error, user_data);
+		request_deadlock_folder(GTK_WINDOW(user_data));
 		return;
 	}
 	Installer *s = g_new0(Installer, 1);

@@ -8,18 +8,18 @@ deadlock mod manager written in c, built with gtk4
 - fuzzy search
 - auto find game dir and mod dir
 - mostly compatible with the other (worse) tauri deadlock mod manager
+- custom game dir i think should work
 
 ## Planned features
 - updates
 - dependancy resolution
-- custom game dir
 - maybe combining vpk files?
 
-## Installation
-unfortunately you have to manually build the thing. theres not gonna be an easy zip file download
-because static linking gtk4 is a pain and a half and im not gonna do that
-
 ## Building
+
+our patent-pending "Build for dummies :p" build system automagically handles most edge cases and tells you what
+dependancies to install to successfully build the thing. it can also give you a zip file with the `--bundle` flag
+
 ### Linux
 install the dependencies with your package manager, then run:
 

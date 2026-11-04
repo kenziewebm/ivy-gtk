@@ -7,6 +7,14 @@
 #include <gdk/gdk.h>
 #include <libadwaita-1/adwaita.h>
 #include <pthread.h>
+#include <glib/gstdio.h>
+
+#include "net.h"
+#include "runtime-curl.h"
+
+#ifndef API
+#define API "https://api.deadlockmods.app/api/v2/mods"
+#endif
 
 #define API_MOD_GET_INFO "https://api.deadlockmods.app/api/v2/mods/%s"
 
@@ -16,29 +24,9 @@ struct response {
 };
 
 typedef struct {
-    char *id;
-    char *name;
-    char *author;
-    char *desc;
-    char *category;
-    char *hero;
-    char *image_url;
-    int likes;
-    int downloads;
-    GdkTexture *imgcache;
-} ModInfo;
-
-typedef struct {
-    char *url;
-    ModInfo *info;
-    GWeakRef pic_ref;
-    GWeakRef spinner_ref;
-} AsyncImgTask;
-
-typedef struct {
-    GdkTexture *texture;
-    AsyncImgTask *task;
-} AsyncImgResult;
+	GString *body;
+	char *etag;
+} Response;
 
 void free_mod_info(ModInfo *info) {
     if (!info) return;
@@ -110,7 +98,7 @@ ModInfo *parse_mod_json(const char *mod_id, json_object *obj) {
 }
 
 ModInfo *get_mod_info(const char *mod_id) {
-    CURL *curl = curl_easy_init();
+    CURL *curl = ivy_curl_easy_init();
     if (curl == NULL) return NULL;
 
     struct response response = {
@@ -148,7 +136,7 @@ ModInfo *get_mod_info(const char *mod_id) {
 
 GdkTexture *get_image_texture(const char *url) {
     if (!url) return NULL;
-    CURL *curl = curl_easy_init();
+    CURL *curl = ivy_curl_easy_init();
     if (!curl) return NULL;
     struct response response = { .data = NULL, .size = 0 };
 
@@ -220,4 +208,92 @@ void *download_image_worker(void *arg) {
 
     g_idle_add(on_image_downloaded, res);
     pthread_exit(NULL);
+}
+
+static size_t receive_body(char *data, size_t size, size_t count, void *user_data) {
+	Response *r = user_data;
+	g_string_append_len(r->body, data, size * count);
+	return size * count;
+}
+
+static size_t receive_header(char *data, size_t size, size_t count, void *user_data) {
+	Response *r = user_data;
+	size_t length = size * count;
+	if (length > 5 && !g_ascii_strncasecmp(data, "etag:", 5)) {
+		g_free(r->etag);
+		r->etag = g_strstrip(g_strndup(data + 5, length - 5));
+	}
+	return length;
+}
+
+static CURL *new_request(const char *url) {
+	CURL *curl = ivy_curl_easy_init();
+	if (!curl) return NULL;
+	curl_easy_setopt(curl, CURLOPT_URL, url);
+	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+	curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
+	curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
+	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 20L);
+	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 600L);
+	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+	return curl;
+}
+
+static json_object *fetch_json(const char *url, const char *etag, char **new_etag, long *status) {
+	CURL *curl = new_request(url);
+	if (!curl) return NULL;
+	Response response = {.body = g_string_new(NULL)};
+	struct curl_slist *headers = NULL;
+	if (etag && etag[0]) {
+		char *header = g_strdup_printf("If-None-Match: %s", etag);
+		headers = curl_slist_append(headers, header);
+		g_free(header);
+		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+	}
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, receive_body);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+	curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, receive_header);
+	curl_easy_setopt(curl, CURLOPT_HEADERDATA, &response);
+	CURLcode result = curl_easy_perform(curl);
+	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, status);
+	json_object *obj = result == CURLE_OK ? json_tokener_parse(response.body->str) : NULL;
+	if (result != CURLE_OK) g_print("[net] %s: %s\n", url, curl_easy_strerror(result));
+	if (new_etag) *new_etag = response.etag;
+	else g_free(response.etag);
+	g_string_free(response.body, TRUE);
+	curl_slist_free_all(headers);
+	curl_easy_cleanup(curl);
+	return obj;
+}
+
+json_object *get_mod_catalog(const char *etag, char **new_etag, long *status) {
+	return fetch_json(API, etag, new_etag, status);
+}
+
+json_object *get_mod_downloads(const char *mod_id) {
+	char *url = g_strdup_printf(API "/%s/downloads", mod_id);
+	long status = 0;
+	json_object *obj = fetch_json(url, NULL, NULL, &status);
+	g_free(url);
+	return obj;
+}
+
+gboolean download_file(const char *url, const char *path, GError **error) {
+	CURL *curl = new_request(url);
+	FILE *file = g_fopen(path, "wb");
+	if (!curl || !file) {
+		if (curl) curl_easy_cleanup(curl);
+		if (file) fclose(file);
+		g_set_error_literal(error, G_IO_ERROR, G_IO_ERROR_FAILED, "Couldn't create the download.");
+		return FALSE;
+	}
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, file);
+	CURLcode result = curl_easy_perform(curl);
+	int closed = fclose(file);
+	curl_easy_cleanup(curl);
+	if (result != CURLE_OK || closed != 0) {
+		g_set_error(error, G_IO_ERROR, G_IO_ERROR_FAILED, "Download failed: %s", result != CURLE_OK ? curl_easy_strerror(result) : "couldn't save file");
+		return FALSE;
+	}
+	return TRUE;
 }

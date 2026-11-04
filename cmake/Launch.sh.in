@@ -1,0 +1,26 @@
+#!/bin/sh
+set -eu
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+export GTK_DATA_PREFIX="$ROOT" GTK_EXE_PREFIX="$ROOT"
+export GSETTINGS_SCHEMA_DIR="$ROOT/share/glib-2.0/schemas"
+export XDG_DATA_DIRS="$ROOT/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+export GIO_MODULE_DIR="$ROOT/lib/gio/modules"
+export LD_LIBRARY_PATH="$ROOT/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+if [ -f "$ROOT/etc/fonts/fonts.conf" ]; then
+    export FONTCONFIG_PATH="$ROOT/etc/fonts"
+fi
+if [ -f "$ROOT/etc/ssl/cert.pem" ]; then
+    export SSL_CERT_FILE="$ROOT/etc/ssl/cert.pem" IVY_CA_BUNDLE="$ROOT/etc/ssl/cert.pem"
+fi
+cache=
+trap '[ -z "$cache" ] || rm -f -- "$cache"' EXIT HUP INT TERM
+if [ -x "$ROOT/bin/gdk-pixbuf-query-loaders" ]; then
+    cache=$(mktemp)
+    export GDK_PIXBUF_MODULEDIR="$ROOT/@pixbuf_relative@"
+    export GDK_PIXBUF_MODULE_FILE="$cache"
+    "$ROOT/bin/gdk-pixbuf-query-loaders" > "$cache"
+fi
+set +e
+"$ROOT/bin/@exe_name@" "$@"
+status=$?
+exit "$status"

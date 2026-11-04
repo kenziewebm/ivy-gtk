@@ -7,6 +7,65 @@
 #include "sanitizer.h"
 #include "installer.h"
 
+static void folder_response(AdwAlertDialog *dialog, const char *response, gpointer user_data);
+
+void deadlock_setup_error(GtkWindow *window, const char *message) {
+	AdwDialog *dialog = adw_alert_dialog_new("Couldn't set up Deadlock", message);
+	adw_alert_dialog_add_responses(ADW_ALERT_DIALOG(dialog), "cancel", "Cancel", "select", "Select folder", NULL);
+	adw_alert_dialog_set_close_response(ADW_ALERT_DIALOG(dialog), "cancel");
+	g_object_set_data(G_OBJECT(window), "selecting-folder", GINT_TO_POINTER(TRUE));
+	g_object_set_data_full(G_OBJECT(dialog), "setup-window", g_object_ref(window), g_object_unref);
+	g_signal_connect(dialog, "response", G_CALLBACK(folder_response), window);
+	adw_dialog_present(dialog, GTK_WIDGET(window));
+}
+
+static void folder_selected(GObject *source, GAsyncResult *result, gpointer user_data) {
+	GtkWindow *window = user_data;
+	GError *error = NULL;
+	GFile *file = gtk_file_dialog_select_folder_finish(GTK_FILE_DIALOG(source), result, &error);
+	g_object_set_data(G_OBJECT(window), "selecting-folder", NULL);
+	if (file) {
+		char *folder = g_file_get_path(file);
+		if (!folder) g_set_error_literal(&error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED, "Please select a local Deadlock folder.");
+		else if (setup_deadlock(folder, &error)) {
+			fill_modlist(g_object_get_data(G_OBJECT(window), "mod-list"),
+				g_object_get_data(G_OBJECT(window), "mod-content"));
+		}
+		g_free(folder);
+		g_object_unref(file);
+	}
+	if (error && !g_error_matches(error, GTK_DIALOG_ERROR, GTK_DIALOG_ERROR_DISMISSED) &&
+		!g_error_matches(error, GTK_DIALOG_ERROR, GTK_DIALOG_ERROR_CANCELLED)) {
+		deadlock_setup_error(window, error->message);
+	}
+	g_clear_error(&error);
+	g_object_unref(window);
+}
+
+static void folder_response(AdwAlertDialog *dialog, const char *response, gpointer user_data) {
+	GtkWindow *window = user_data;
+	if (strcmp(response, "select") != 0) {
+		g_object_set_data(G_OBJECT(window), "selecting-folder", NULL);
+		return;
+	}
+	GtkFileDialog *picker = gtk_file_dialog_new();
+	gtk_file_dialog_set_title(picker, "Select Deadlock folder");
+	gtk_file_dialog_select_folder(picker, window, NULL, folder_selected, g_object_ref(window));
+	g_object_unref(picker);
+}
+
+void request_deadlock_folder(GtkWindow *window) {
+	if (g_object_get_data(G_OBJECT(window), "selecting-folder")) return;
+	g_object_set_data(G_OBJECT(window), "selecting-folder", GINT_TO_POINTER(TRUE));
+	AdwDialog *dialog = adw_alert_dialog_new("We couldn't find a Deadlock installation!", "Please select your Deadlock folder.");
+	adw_alert_dialog_add_responses(ADW_ALERT_DIALOG(dialog), "cancel", "Cancel", "select", "Select folder", NULL);
+	adw_alert_dialog_set_response_appearance(ADW_ALERT_DIALOG(dialog), "select", ADW_RESPONSE_SUGGESTED);
+	adw_alert_dialog_set_close_response(ADW_ALERT_DIALOG(dialog), "cancel");
+	g_object_set_data_full(G_OBJECT(dialog), "setup-window", g_object_ref(window), g_object_unref);
+	g_signal_connect(dialog, "response", G_CALLBACK(folder_response), window);
+	adw_dialog_present(dialog, GTK_WIDGET(window));
+}
+
 static void delete_response(AdwAlertDialog *dialog, const char *response, gpointer user_data) {
 	if (strcmp(response, "delete") != 0) return;
 	GtkWidget *row = g_object_get_data(G_OBJECT(dialog), "row");

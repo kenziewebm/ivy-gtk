@@ -5,4 +5,5 @@ void mod_selected(AdwPreferencesRow *mod, gpointer user_data);
 void fill_modlist(GtkWidget* ListBox, GtkWidget *content);
 int delete_mod(const char *mod_id);
 const char *get_manifest_path(void);
+gboolean setup_deadlock(const char *folder, GError **error);
 void append_mod(GtkWidget *list, GtkWidget *content, ModInfo *info);

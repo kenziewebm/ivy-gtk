@@ -2,11 +2,26 @@
 
 set -e
 
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
+bundle_requested=false
+case "${1:-}" in
+	--package) bundle_requested=true ;;
+	"") ;;
+	*) echo "usage: bash build-for-dummies.sh [--package]"; exit 1 ;;
+esac
+if [ "$#" -gt 1 ]; then
+	echo "usage: bash build-for-dummies.sh [--package]"
+	exit 1
+fi
+
 build_project() {
 	echo "starting build"
 	cmake -B build -S .
 	cmake --build build
 	cp "build/ivy-gtk${1:-}" .
+	if "$bundle_requested"; then
+		cmake --build build --target bundle
+	fi
 	echo "done"
 	tput bel 2>/dev/null || true
 }

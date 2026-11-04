@@ -23,6 +23,7 @@ pkg_check_modules(LIBARCHIVE REQUIRED libarchive)
 add_executable(ivy-gtk
     src/main.c
     src/modlist.c
+    src/gameinfo.c
     src/net.c
     src/sanitizer.c
     $<$<PLATFORM_ID:Windows>:src/steam-win.c>
@@ -66,3 +67,5 @@ target_link_libraries(ivy-gtk PRIVATE
 IF(MINGW)
 	target_link_libraries(ivy-gtk PRIVATE winpthread)
 endif()
+
+include(cmake/Packaging.cmake)

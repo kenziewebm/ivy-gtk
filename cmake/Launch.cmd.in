@@ -1,0 +1,23 @@
+@echo off
+setlocal
+set "ROOT=%~dp0"
+set "PATH=%ROOT%bin;%SystemRoot%\System32;%SystemRoot%"
+set "GTK_DATA_PREFIX=%ROOT%"
+set "GTK_EXE_PREFIX=%ROOT%"
+set "GSETTINGS_SCHEMA_DIR=%ROOT%share\glib-2.0\schemas"
+set "XDG_DATA_DIRS=%ROOT%share"
+set "GIO_MODULE_DIR=%ROOT%lib\gio\modules"
+set "FONTCONFIG_PATH=%ROOT%etc\fonts"
+if exist "%ROOT%etc\ssl\cert.pem" set "SSL_CERT_FILE=%ROOT%etc\ssl\cert.pem"
+if exist "%ROOT%etc\ssl\cert.pem" set "IVY_CA_BUNDLE=%ROOT%etc\ssl\cert.pem"
+set "CACHE=%TEMP%\ivy-pixbuf-%RANDOM%-%RANDOM%.cache"
+set "GDK_PIXBUF_MODULEDIR=%ROOT%lib\gdk-pixbuf-2.0\loaders"
+set "GDK_PIXBUF_MODULE_FILE=%CACHE%"
+if exist "%ROOT%bin\gdk-pixbuf-query-loaders.exe" (
+    "%ROOT%bin\gdk-pixbuf-query-loaders.exe" > "%CACHE%"
+    if errorlevel 1 exit /b 1
+)
+"%ROOT%bin\@exe_name@" %*
+set "STATUS=%ERRORLEVEL%"
+if exist "%CACHE%" del "%CACHE%"
+exit /b %STATUS%

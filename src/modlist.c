@@ -3,15 +3,48 @@
 #include <pthread.h>
 #include <json-c/json.h>
 #include <errno.h>
+#include <glib/gstdio.h>
 
 #include "ui.h"
 #include "net.h"
 #include "steam.h"
+#include "gameinfo.h"
 
-static char manifest_path[1024];
+static char *manifest_path;
 
 const char *get_manifest_path(void) {
-    return manifest_path;
+    return manifest_path ? manifest_path : "";
+}
+
+gboolean setup_deadlock(const char *folder, GError **error) {
+    char *gameinfo = g_build_filename(folder, "game", "citadel", "gameinfo.gi", NULL);
+    gboolean valid = g_file_test(gameinfo, G_FILE_TEST_IS_REGULAR);
+    if (!valid) {
+        g_free(gameinfo);
+        g_set_error_literal(error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
+            "Please select the Deadlock folder containing game/citadel/gameinfo.gi.");
+        return FALSE;
+    }
+    gboolean configured = check_gameinfo(gameinfo, error);
+    g_free(gameinfo);
+    if (!configured) return FALSE;
+    char *addons = g_build_filename(folder, "game", "citadel", "addons", NULL);
+    char *path = g_build_filename(addons, ".dmm.json", NULL);
+    gboolean ok = TRUE;
+    if (g_mkdir_with_parents(addons, 0755) != 0) {
+        g_set_error(error, G_IO_ERROR, g_io_error_from_errno(errno),
+            "Couldn't create the addons directory: %s", g_strerror(errno));
+        ok = FALSE;
+    } else if (!g_file_test(path, G_FILE_TEST_EXISTS)) {
+        ok = g_file_set_contents(path, "{\n  \"version\": 1,\n  \"mods\": {}\n}\n", -1, error);
+    }
+    if (ok) {
+        g_free(manifest_path);
+        manifest_path = g_strdup(path);
+    }
+    g_free(path);
+    g_free(addons);
+    return ok;
 }
 
 void append_mod(GtkWidget *list, GtkWidget *content, ModInfo *info) {
@@ -89,44 +122,29 @@ void *get_mods_from_file(void* arg) {
 
 void fill_modlist(GtkWidget *ListBox, GtkWidget *content) {
     pthread_t thread;
-    char *filepath = manifest_path;
-    filepath[0] = '\0';
-
-    /* first try hardcoded ~/deadlock, then resolve */
-    char* homedir = getenv("HOME");
-    char deaddir[256];
-#if defined(_WIN32)
-    sprintf(deaddir, "%s\\deadlock", homedir);
-#else
-    sprintf(deaddir, "%s/deadlock", homedir);
-#endif
-    FILE* fd = fopen(deaddir, "r");
-    if (fd) {
-#if defined(_WIN32)
-        sprintf(filepath, "%s\\game\\citadel\\addons\\.dmm.json", deaddir);
-#else
-        sprintf(filepath, "%s/game/citadel/addons/.dmm.json", deaddir);
-#endif
-        fclose(fd);
-    }
-    else {
+    if (!manifest_path) {
+        /* first try ~/deadlock, then resolve through Steam */
+        char *folder = g_build_filename(g_get_home_dir(), "deadlock", NULL);
+        GError *error = NULL;
+        gboolean ready = setup_deadlock(folder, &error);
+        g_free(folder);
+        if (g_error_matches(error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND)) g_clear_error(&error);
         char steam_folder[512];
         char deadlock_folder[1024];
-        if (get_steam_path(steam_folder, sizeof(steam_folder)) != 0 ||
-            get_deadlock_path(steam_folder, deadlock_folder, sizeof(deadlock_folder)) != 0) {
-            g_print("[modlist] couldn't find Deadlock\n");
+        if (!ready && !error && get_steam_path(steam_folder, sizeof(steam_folder)) == 0 &&
+            get_deadlock_path(steam_folder, deadlock_folder, sizeof(deadlock_folder)) == 0)
+            ready = setup_deadlock(deadlock_folder, &error);
+        if (!ready) {
+            GtkWindow *window = GTK_WINDOW(gtk_widget_get_root(content));
+            if (error) deadlock_setup_error(window, error->message);
+            else request_deadlock_folder(window);
+            g_clear_error(&error);
             return;
         }
-#if defined(_WIN32)
-        sprintf(filepath, "%s\\game\\citadel\\addons\\.dmm.json", deadlock_folder);
-	g_print("%s\n", filepath);
-#else
-        sprintf(filepath, "%s/game/citadel/addons/.dmm.json", deadlock_folder);
-#endif
     }
 
     ExecTask task = {
-        .filepath = filepath,
+        .filepath = manifest_path,
         .json_res = NULL,
         .status = 0
     };

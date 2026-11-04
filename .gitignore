@@ -1,4 +1,5 @@
 build/
+dist/
 ivy-gtk.exe
 ivy-gtk
 ivy-gtk.dSYM
