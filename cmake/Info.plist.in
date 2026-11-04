@@ -4,6 +4,7 @@
 <key>CFBundleExecutable</key><string>Ivy</string>
 <key>CFBundleIdentifier</key><string>xyz.kenziewebm.ivy</string>
 <key>CFBundleName</key><string>Ivy</string>
+<key>CFBundleIconFile</key><string>ivy.icns</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleVersion</key><string>1</string>
 <key>NSHighResolutionCapable</key><true/>

@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.25)
 
 project(ivy-gtk C)
 
+if(WIN32)
+    enable_language(RC)
+endif()
+
 set(CMAKE_C_STANDARD 11)
 
 
@@ -68,4 +72,5 @@ IF(MINGW)
 	target_link_libraries(ivy-gtk PRIVATE winpthread)
 endif()
 
+include(cmake/Icons.cmake)
 include(cmake/Packaging.cmake)

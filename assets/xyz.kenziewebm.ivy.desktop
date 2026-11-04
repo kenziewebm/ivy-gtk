@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Ivy
+Comment=Deadlock mod manager
+Exec=ivy-gtk
+Icon=xyz.kenziewebm.ivy
+Terminal=false
+Categories=Game;Utility;
